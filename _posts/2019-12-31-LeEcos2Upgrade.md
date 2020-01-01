@@ -26,6 +26,7 @@ cd6ab2fd	fastboot
 {% endhighlight %}
 
 4. flash the recovery
+{% highlight cmd %}
 fastboot flash recovery ./leecos2upgrade/twrp-3.3.1-0-s2.img
 Sending 'recovery' (24618 KB)                      OKAY [  0.776s]
 Writing 'recovery'                                 OKAY [  0.372s]

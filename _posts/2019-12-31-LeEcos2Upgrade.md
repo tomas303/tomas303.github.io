@@ -7,25 +7,25 @@ categories: mobile
 
 Leeco s2 upgrade 16.0 has finally arrived but upgrade installation isn't automatic. First I decided to install latest twrp custom recovery so I followed [lineageos install custom recovery][lineageos-installcustomrecovery] instructions.
 
-1. Allow android debuging - see [lineageos setup adb][lineageos-setupadb]. It is Android debugging switch under Developer options.
+Allow android debuging - see [lineageos setup adb][lineageos-setupadb]. It is Android debugging switch under Developer options.
 {% highlight cmd %}
 adb devices
 List of devices attached
 cd6ab2fd	device
 {% endhighlight %}
 
-2. Enter into fastboot mode.
+Enter into fastboot mode.
 {% highlight cmd %}
 adb reboot bootloader
 {% endhighlight %}
 
-3. Verify fastboot recognises my phone
+Verify fastboot recognises my phone
 {% highlight cmd %}
 fastboot devices
 cd6ab2fd	fastboot
 {% endhighlight %}
 
-4. flash the recovery
+flash the recovery
 {% highlight cmd %}
 fastboot flash recovery ./leecos2upgrade/twrp-3.3.1-0-s2.img
 Sending 'recovery' (24618 KB)                      OKAY [  0.776s]
@@ -33,7 +33,7 @@ Writing 'recovery'                                 OKAY [  0.372s]
 Finished. Total time: 1.159s
 {% endhighlight %}
 
-5. I verified I can boot newly flashed twrp recovery image holding Volume Up + Power.
+I verified I can boot newly flashed twrp recovery image holding Volume Up + Power.
 
 
 

@@ -16,7 +16,7 @@ PS C:\> Get-Help Set-ExecutionPolicy
 
 * in case to run script from shared location, change of execution policy is needed - for current command or permanently(see all possiblities using Get-Help)
 {% highlight cmd %}
-PS C:\> Set-ExecutionPolicy Bypass -Scope Process -Force; .\measure.ps1
+PS C:\> Set-ExecutionPolicy Bypass -Scope Process -Force; \\share\somescript.ps1
 PS C:\> Set-ExecutionPolicy -ExecutionPolicy bypass -Scope CurrentUser
 {% endhighlight %}
 

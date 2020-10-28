@@ -59,6 +59,5 @@ Especially when taking advantage of type inference:
 
 [blend bitmap]: https://stackoverflow.com/questions/29044637/how-to-fillrect-using-a-blend-mode-like-multiply-and-not-just-a-simple-transpar
 [alpha blend control]: https://stackoverflow.com/questions/12627526/is-it-possible-to-alpha-blend-a-vcl-control-on-a-tform
-[hints on control regions]:
-https://stackoverflow.com/questions/43321926/make-showhint-work-on-custom-control-with-several-different-rects-each-with-the
+[hints on control regions]:https://stackoverflow.com/questions/43321926/make-showhint-work-on-custom-control-with-several-different-rects-each-with-the
 [inline declaration]:http://docwiki.embarcadero.com/RADStudio/Rio/en/Inline_Variable_Declaration

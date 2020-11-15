@@ -42,3 +42,5 @@ plugins:
 exclude:
    - jekyll.sh
    - vendor
+
+highlighter: rouge

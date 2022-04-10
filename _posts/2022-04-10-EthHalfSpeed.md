@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "Ethernet half speed"
-date:   2022-04-10 12:00:00
+date:   2022-04-10 01:00:00
 categories: system net
 ---
 I had wondered why the speed of my 1GB network was only half when compared with other comps in my network. I have measured it with iperf3 tool. Finally I found out that there is a bug in kernel for e1000e driver - [kernel-problem][kernel-problem].

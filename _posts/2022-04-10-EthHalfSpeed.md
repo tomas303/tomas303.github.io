@@ -6,7 +6,7 @@ categories: system net
 ---
 I had wondered why the speed of my 1GB network was only half when compared with other comps in my network. I have measured it with iperf3 tool. Finally I found out that there is a bug in kernel for e1000e driver - [kernel-problem][kernel-problem].
 
-* I have followed instructions there and created systemd service _/etc/systemd/system/nic-config.service with this content_:
+I have followed instructions there and created systemd service _/etc/systemd/system/nic-config.service with this content_:
 
 {% highlight cmd %}
 # solve problem when i219-lm ethernet device runs half gigabit of speed
@@ -23,7 +23,7 @@ Restart=on-failure
 WantedBy=multi-user.target
 {% endhighlight %}
 
-You can get service running with the help of commands:
+You can get service running with the help of this commands:
 {% highlight cmd %}
 systemctl enable nic-config.service
 systemctl start nic-config.service

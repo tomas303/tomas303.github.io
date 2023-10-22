@@ -1,0 +1,12 @@
+#!/bin/bash
+export JEKYLL_VERSION=latest
+export JEKYLL_TOMAS303=/home/tomas/development/tomas303/tomas303.github.io
+
+podman run  \
+  -it \
+  --rm  \
+  --name jekyllghpages  \
+  -e JEKYLL_ROOTLESS=1 \
+  -p 4000:4000 \
+  -v "$JEKYLL_TOMAS303:/srv/jekyll:Z" \
+  localhost/jekyllghpages

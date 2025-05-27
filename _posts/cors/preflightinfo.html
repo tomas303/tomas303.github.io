@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS & Private Network Access Reference Table</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 15px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 12px;
+            text-align: left;
+            font-weight: 600;
+            border: 1px solid #5a6c7d;
+        }
+        td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            vertical-align: top;
+            line-height: 1.4;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        tr:hover {
+            background-color: #e8f4f8;
+        }
+        .result-none {
+            background-color: #d4edda;
+            color: #155724;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .result-cors {
+            background-color: #fff3cd;
+            color: #856404;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .result-pna {
+            background-color: #cce5ff;
+            color: #004085;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .result-both {
+            background-color: #f8d7da;
+            color: #721c24;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .code {
+            font-family: 'Courier New', monospace;
+            background-color: #f1f3f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+        .explanation {
+            font-size: 14px;
+            color: #555;
+        }
+        .info-box {
+            background: #e7f3ff;
+            border: 1px solid #b8daff;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .info-box h3 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .download-note {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 30px;
+            text-align: center;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 CORS & Private Network Access Reference Guide</h1>
+        
+        <div class="info-box">
+            <h3>📋 Quick Reference</h3>
+            <p><strong>CORS</strong> is triggered when protocol, domain, or port differs between page and API.</p>
+            <p><strong>Private Network Access (PNA)</strong> is triggered when crossing network privacy boundaries (public→private, private→localhost).</p>
+            <p><strong>Both</strong> can apply simultaneously when a request is cross-origin AND crosses network boundaries.</p>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <span class="result-none">None</span>
+                <span>Same-origin, no restrictions</span>
+            </div>
+            <div class="legend-item">
+                <span class="result-cors">CORS</span>
+                <span>Cross-origin policies apply</span>
+            </div>            <div class="legend-item">
+                <span class="result-pna">PNA</span>
+                <span>Private Network Access policies apply (rare in practice)</span>
+            </div>
+            <div class="legend-item">
+                <span class="result-both">CORS + PNA</span>
+                <span>Both policies apply</span>
+            </div>
+        </div>        <h2>🎯 Common Development Scenarios</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Page Origin</th>
+                    <th>API Server</th>
+                    <th>Result</th>
+                    <th>Explanation</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="code">https://myapp.github.io</span></td>
+                    <td><span class="code">https://myapp.github.io/api</span></td>
+                    <td><span class="result-none">None</span></td>
+                    <td class="explanation">Same-origin: identical protocol, domain, and port</td>
+                </tr>
+                <tr>
+                    <td><span class="code">https://myapp.github.io</span></td>
+                    <td><span class="code">https://api.github.io</span></td>
+                    <td><span class="result-cors">CORS</span></td>
+                    <td class="explanation">Cross-origin: different subdomain triggers CORS</td>
+                </tr>
+                <tr>
+                    <td><span class="code">https://myapp.github.io</span></td>
+                    <td><span class="code">http://myapp.github.io</span></td>
+                    <td><span class="result-cors">CORS</span></td>
+                    <td class="explanation">Cross-origin: different protocol (https→http)</td>
+                </tr>
+                <tr>
+                    <td><span class="code">http://localhost:3000</span></td>
+                    <td><span class="code">http://localhost:8099</span></td>
+                    <td><span class="result-cors">CORS</span></td>
+                    <td class="explanation">Cross-origin: different ports (3000 ≠ 8099)</td>
+                </tr>
+                <tr>
+                    <td><span class="code">http://localhost:3000</span></td>
+                    <td><span class="code">http://127.0.0.1:8099</span></td>
+                    <td><span class="result-cors">CORS</span></td>
+                    <td class="explanation">Cross-origin: localhost ≠ 127.0.0.1 (different hostnames)</td>
+                </tr>
+                <tr>
+                    <td><span class="code">http://192.168.1.50:3000</span></td>
+                    <td><span class="code">http://192.168.1.100:8099</span></td>
+                    <td><span class="result-cors">CORS</span></td>
+                    <td class="explanation">Cross-origin: different IP addresses in same network</td>
+                </tr>
+                <tr>
+                    <td><span class="code">file:///C:/project/index.html</span></td>
+                    <td><span class="code">http://localhost:8099</span></td>
+                    <td><span class="result-cors">CORS</span></td>
+                    <td class="explanation">Cross-origin: file protocol ≠ http protocol</td>
+                </tr>
+                <tr>
+                    <td><span class="code">https://myapp.github.io</span></td>
+                    <td><span class="code">http://localhost:8099</span></td>
+                    <td><span class="result-both">CORS + PNA</span></td>
+                    <td class="explanation">Cross-origin + public→localhost = both policies</td>
+                </tr>
+                <tr>
+                    <td><span class="code">https://myapp.github.io</span></td>
+                    <td><span class="code">http://192.168.1.100:8099</span></td>
+                    <td><span class="result-both">CORS + PNA</span></td>
+                    <td class="explanation">Cross-origin + public→private = both policies</td>
+                </tr>                <tr>
+                    <td><span class="code">http://192.168.1.50:3000</span></td>
+                    <td><span class="code">http://localhost:8099</span></td>
+                    <td><span class="result-cors">CORS</span></td>
+                    <td class="explanation">Cross-origin only. PNA private→local not triggered in practice (browser implementation variance)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>🧪 Practical Testing Scenarios for Your Environment</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Test Scenario</th>
+                    <th>How to Set Up</th>
+                    <th>Expected Result</th>
+                    <th>Required Server Headers</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>GitHub Pages → localhost</strong></td>
+                    <td>Deploy HTML to GitHub Pages, API at <span class="code">localhost:8099</span></td>
+                    <td><span class="result-both">CORS + PNA</span></td>
+                    <td class="explanation">
+                        <span class="code">Access-Control-Allow-Origin</span><br>
+                        <span class="code">Access-Control-Allow-Private-Network: true</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Local file → localhost</strong></td>
+                    <td>Open HTML as <span class="code">file://</span>, API at <span class="code">localhost:8099</span></td>
+                    <td><span class="result-cors">CORS</span></td>
+                    <td class="explanation">
+                        <span class="code">Access-Control-Allow-Origin: null</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>ngrok → localhost</strong></td>
+                    <td>Use ngrok tunnel for HTML, API at <span class="code">localhost:8099</span></td>
+                    <td><span class="result-both">CORS + PNA</span></td>
+                    <td class="explanation">
+                        <span class="code">Access-Control-Allow-Origin</span><br>
+                        <span class="code">Access-Control-Allow-Private-Network: true</span>
+                    </td>
+                </tr>                <tr>
+                    <td><strong>Local server → localhost</strong></td>
+                    <td>Serve HTML from <span class="code">localhost:3000</span>, API at <span class="code">localhost:8099</span></td>
+                    <td><span class="result-cors">CORS</span></td>
+                    <td class="explanation">Cross-origin: different ports require CORS headers</td>
+                </tr>                <tr>
+                    <td><strong>VM → Host localhost</strong></td>
+                    <td>HTML from VM at <span class="code">http://192.168.1.100:3000</span>, API on host via <span class="code">http://192.168.1.1:8099</span></td>
+                    <td><span class="result-cors">CORS</span></td>
+                    <td class="explanation">
+                        <span class="code">Access-Control-Allow-Origin</span> (different IPs = cross-origin)
+                    </td>
+                </tr>
+            </tbody>
+        </table>        <h2>⚙️ Required Headers for Success</h2>
+        
+        <div class="info-box">
+            <h3>📤 Key Request Headers (Sent by Browser)</h3>
+            <p><span class="code">Origin: https://example.com</span> - <strong>Critical!</strong> Identifies the requesting origin for CORS and PNA checks</p>
+            <p><span class="code">Access-Control-Request-Method: POST</span> - Preflight: which HTTP method will be used</p>
+            <p><span class="code">Access-Control-Request-Headers: authorization, content-type</span> - Preflight: which headers will be sent</p>
+            <p><span class="code">Access-Control-Request-Private-Network: true</span> - Preflight: indicates request crosses network boundaries</p>
+            <p><strong>Note:</strong> The browser automatically sends these headers - you cannot control them directly from JavaScript.</p>
+        </div>
+
+        <div class="info-box">
+            <h3>📥 CORS Response Headers (Required by Server)</h3>
+            <p><span class="code">Access-Control-Allow-Origin: [origin]</span> - Allow specific origin or * (must match request Origin header)</p>
+            <p><span class="code">Access-Control-Allow-Methods: GET, POST, OPTIONS</span> - Allowed HTTP methods</p>
+            <p><span class="code">Access-Control-Allow-Headers: authorization, content-type</span> - Allowed request headers</p>
+            <p><span class="code">Access-Control-Allow-Credentials: true</span> - Required for credential requests (cookies, auth headers)</p>
+            <p><span class="code">Access-Control-Max-Age: 86400</span> - How long browsers can cache preflight responses (seconds)</p>
+        </div>        <div class="info-box">
+            <h3>🔒 Private Network Access Response Headers</h3>
+            <p><span class="code">Access-Control-Allow-Private-Network: true</span> - <strong>Required</strong> when crossing network boundaries</p>
+            <p>This header must be present in preflight (OPTIONS) responses when transitioning to more private networks.</p>
+            <p><strong>Important:</strong> This header is only checked during preflight requests, not on the actual request.</p>
+            <p><strong>Browser Implementation Note:</strong> Private→Local transitions may not consistently trigger PNA headers across all browsers or scenarios, despite being specified.</p>
+        </div><div class="info-box">
+            <h3>🔬 Research Summary: CORS vs PNA Origin/Address Space Determination</h3>
+            <p><strong>Key Research Question:</strong> How do CORS and Private Network Access determine origins and address spaces - string comparison vs DNS resolution?</p>
+            
+            <h4>🎯 CORS Origin Comparison (Same-Origin Policy)</h4>
+            <ul>
+                <li><strong>Method:</strong> Pure string-based comparison of origin tuples</li>
+                <li><strong>Components:</strong> Protocol + Host + Port (e.g., "https://example.com:443")</li>
+                <li><strong>No DNS Resolution:</strong> Browsers compare domain names as strings, not resolved IP addresses</li>
+                <li><strong>Result:</strong> <code>example.com</code> ≠ <code>localhost</code> even if they resolve to the same IP</li>
+            </ul>
+            
+            <h4>🌐 Private Network Access (PNA) Address Space Determination</h4>
+            <ul>
+                <li><strong>Method:</strong> DNS resolution followed by IP address classification</li>
+                <li><strong>Process:</strong> Domain → DNS lookup → IP → RFC 1918 categorization → Boundary check</li>
+                <li><strong>Classification:</strong> Resolved IPs categorized as Local/Private/Public based on ranges</li>
+                <li><strong>Result:</strong> Same domain can cross network boundaries if it resolves to different IP spaces</li>
+            </ul>
+            
+            <h4>📚 Authoritative Sources</h4>
+            <ul>
+                <li><strong><a href="https://fetch.spec.whatwg.org/#cors-protocol" target="_blank">WHATWG Fetch Specification</a></strong> - CORS origin comparison algorithm</li>
+                <li><strong><a href="https://html.spec.whatwg.org/multipage/origin.html#same-origin" target="_blank">HTML Living Standard</a></strong> - Same-origin policy definition</li>
+                <li><strong><a href="https://wicg.github.io/private-network-access/" target="_blank">WICG PNA Specification</a></strong> - Private Network Access address space determination</li>
+            </ul>
+            
+            <p><strong>💡 Practical Impact:</strong> This difference explains why CORS and PNA can apply independently - CORS triggers on domain/port differences (string comparison), while PNA triggers on network boundary crossing (IP-based analysis).</p>
+        </div>
+
+        <div class="info-box">
+            <h3>⚠️ Important: Why Pure PNA Scenarios Are Practically Impossible</h3>
+            <p><strong>Pure Private Network Access</strong> (same-origin + network boundary crossing) is theoretically defined but practically very difficult to achieve because:</p>
+            <ul>
+                <li><strong>Same-origin requires</strong>: identical protocol, domain, and port</li>
+                <li><strong>Network boundary crossing requires</strong>: different network privacy levels (public→private, private→localhost)</li>
+                <li><strong>These conflict!</strong> To cross network boundaries, you typically need different domains/IPs, which makes it cross-origin</li>
+            </ul>
+            <p><strong>Browser Implementation:</strong> Browsers compare origins by <em>domain names</em>, not resolved IP addresses. So <code>example.com</code> and <code>localhost</code> are different origins even if they resolve to the same IP.</p>
+            <p><strong>Rare exceptions:</strong> Possible with DNS tricks (same domain resolving to different IP ranges) or complex proxy setups, but not common in real development.</p>        </div>
+
+        <div class="info-box">
+            <h3>🔬 Technical Summary: How PNA Determines Address Spaces</h3>
+            <p><strong>Key Finding:</strong> Private Network Access (PNA) determines address spaces by <em>resolving domain names to IP addresses first</em>, then categorizing those IP addresses into network spaces - it does <strong>not</strong> compare domain names directly.</p>
+            
+            <h4>🔍 The Process:</h4>
+            <ol>
+                <li><strong>DNS Resolution:</strong> Browser resolves domain names to IP addresses through normal DNS lookup</li>
+                <li><strong>IP Classification:</strong> Resolved IP addresses are categorized using RFC 1918 ranges:
+                    <ul>
+                        <li><strong>Local:</strong> <code>127.0.0.0/8</code>, <code>::1/128</code></li>
+                        <li><strong>Private:</strong> <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code></li>
+                        <li><strong>Public:</strong> All other addresses</li>
+                    </ul>
+                </li>
+                <li><strong>Boundary Check:</strong> Compare source and target IP address spaces to determine if crossing network boundaries</li>
+            </ol>
+            
+            <p><strong>📚 Standards References:</strong></p>
+            <ul>
+                <li><strong><a href="https://wicg.github.io/private-network-access/" target="_blank">WICG Private Network Access Specification</a></strong> - Official specification defining PNA behavior</li>
+                <li><strong><a href="https://tools.ietf.org/html/rfc1918" target="_blank">RFC 1918</a></strong> - Address Allocation for Private Internets (defines private IP ranges)</li>
+            </ul>
+            
+            <p><strong>💡 Practical Implication:</strong> This explains why pure PNA scenarios (same-origin + network boundary crossing) are practically impossible in real development - to cross network boundaries, you typically need different domains/IPs, which automatically makes requests cross-origin and triggers CORS policies.</p>
+        </div>
+
+        <div class="download-note">
+            <strong>💾 Download Instructions:</strong> Right-click this page and select "Save As..." to save this reference table for offline use.
+            <br>Or use Ctrl+S (Windows) / Cmd+S (Mac) to save as an HTML file.
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS API Request Tester</title>
+    <style>        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            height: 100vh;
+            box-sizing: border-box;
+        }        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 40px);
+            overflow: hidden;
+        }
+        
+        /* Make all static sections shrink to content */
+        .container > h1,
+        .info,
+        .origin-info,
+        .request-section {
+            flex-shrink: 0;
+        }
+        
+        /* Remove margins that cause overflow */
+        .container > h1 {
+            margin: 0 0 20px 0;
+        }
+        
+        .info {
+            background: #e7f3ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 0 0 10px 0;
+            border-left: 4px solid #2196F3;
+        }
+        
+        .origin-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 0 0 10px 0;
+        }
+        
+        .request-section {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 0 0 10px 0;
+            border-left: 4px solid #2196F3;
+        }
+        .prefill-section {
+            background: #f8f8f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4CAF50;
+        }
+        .config-row {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .config-row label {
+            min-width: 120px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="password"] {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+        }        .execute-btn {
+            background-color: #4CAF50;
+            color: white;
+            font-size: 16px;
+            padding: 12px 20px;
+            transition: background-color 0.3s;
+        }
+        .execute-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .execute-btn.loading {
+            background-color: #ff9800;
+        }
+        .cancel-btn {
+            background-color: #f44336;
+            color: white;
+            font-size: 16px;
+            padding: 12px 20px;
+            transition: background-color 0.3s;
+        }
+        .loading-indicator {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }.preset-btn {
+            background-color: #2196F3;
+            color: white;
+            font-size: 12px;
+            padding: 6px 10px;
+        }
+        .history-btn {
+            background-color: #607D8B;
+            color: white;
+            font-size: 14px;
+            padding: 6px 12px;
+            margin: 0 5px;
+        }
+        .history-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }        .history-indicator {
+            font-size: 12px;
+            color: #666;
+            padding: 0 10px;
+            min-width: 80px;
+            text-align: center;
+        }
+        .keyboard-hint {
+            font-size: 11px;
+            color: #888;
+            font-style: italic;
+            margin-left: 15px;
+        }
+        .clear-log-btn {
+            background-color: #f44336;
+            color: white;
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .clear-log-btn:hover {
+            background-color: #d32f2f;
+        }
+        .path-input-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .path-input-row input {
+            flex: 1;
+        }
+        .button-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        button:hover {
+            opacity: 0.8;
+        }        .response-section {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            margin-top: 10px;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .response-section h3 {
+            margin: 0 0 10px 0;
+            flex-shrink: 0;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow: auto;
+            border-left: 4px solid #333;
+            font-size: 12px;
+            flex: 1;
+            margin: 0;
+            min-height: 0;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+    </style>
+</head>
+<body>    <div class="container">
+        <h1>CORS API Request Tester</h1>
+          <div class="info">
+            <strong>Purpose:</strong> Test CORS behavior by making requests to any API endpoint.
+            <br><strong>Instructions:</strong> Open DevTools (F12) → Network tab to see actual Origin headers and CORS behavior.
+            <br><strong>Cross-origin testing:</strong> Serve this page from a different port/domain than your API server.
+            <br><strong>📚 Reference Guide:</strong> <a href="preflightinfo.html" target="_blank" style="color: #2196F3; text-decoration: underline;">Open CORS & PNA Reference Table</a> for detailed explanations and scenarios.
+        </div><div class="origin-info">
+            <strong>Current Page Origin:</strong> <span id="currentOrigin">Loading...</span>
+            <br><strong>API Server Address:</strong> <span id="currentApiServer">Loading...</span>
+            <br><strong>Cross-Origin Status:</strong> <span id="corsStatus">Loading...</span>
+            <br><strong>Private Network Status:</strong> <span id="privateNetworkStatus">Loading...</span>
+        </div><div class="request-section">
+            <h3>🔧 API Request Configuration</h3>
+            
+            <div class="config-row">
+                <label for="apiUrl">API Server URL:</label>
+                <input type="text" id="apiUrl" placeholder="http://localhost:8099" style="width: 300px;">
+            </div>
+              <div class="config-row path-input-row">
+                <label for="requestPath">Request Path:</label>
+                <input type="text" id="requestPath" placeholder="" title="Use ↑/↓ arrows for history navigation, Home/End to jump to start/end">
+                <button class="preset-btn" onclick="prefillPublic()">🔓 Public</button>
+                <button class="preset-btn" onclick="prefillSecured()">🔐 Secured</button>
+                <button class="preset-btn" onclick="prefillPrivateNetwork()">🌐 Private</button>
+            </div>
+              
+            <div class="config-row">
+                <span style="font-weight: bold; min-width: 120px;">History:</span>
+                <button class="history-btn" id="historyPrev" onclick="navigateHistory('prev')" title="Previous request">⬅️</button>
+                <span id="historyIndicator" class="history-indicator">No history</span>
+                <button class="history-btn" id="historyNext" onclick="navigateHistory('next')" title="Next request">➡️</button>
+                <span class="keyboard-hint">💡 ↑/↓ for history, Home/End to jump</span>
+            </div>
+            
+            <div class="config-row">
+                <label for="useAuth">Authentication:</label>
+                <label><input type="checkbox" id="useAuth"> Include Authentication</label>
+                <span style="margin-left: 20px;">
+                    <label for="username">Username:</label> <input type="text" id="username" placeholder="Username" style="width: 100px;">
+                    <label for="password">Password:</label> <input type="password" id="password" placeholder="Password" style="width: 100px;">
+                </span>
+            </div>
+            
+            <div class="config-row">
+                <button class="execute-btn" id="executeBtn" onclick="executeRequest()">🚀 Execute Request</button>
+            </div>
+        </div>        <div class="response-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="margin: 0;">📋 Response Log & Analysis:</h3>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button class="clear-log-btn" onclick="clearLog()" title="Clear all logged responses">🗑️ Clear Log</button>
+                    <span style="font-size: 11px; color: #666;">💡 Enhanced with CORS/PNA analysis & troubleshooting</span>
+                </div>
+            </div>
+            <pre id="responseLog">Ready to test CORS requests...
+            
+🎯 QUICK START TIPS:
+• Cross-origin test: Change API Server URL to different port/domain
+• DevTools: Open F12 → Network tab to see preflight requests
+• Reference: Click link above for detailed CORS & PNA scenarios
+• History: Use ↑/↓ arrows in Request Path field for navigation</pre>
+        </div>
+    </div>
+
+    <!-- Configure API settings before loading scripts -->
+    <script>        // Initialize page
+        document.getElementById('currentOrigin').textContent = window.location.origin;
+        document.getElementById('apiUrl').value = 'http://localhost:8099';
+        document.getElementById('currentApiServer').textContent = 'http://localhost:8099';
+          // Update CORS status when API URL changes
+        function updateCorsStatus() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            
+            // Update API server display
+            document.getElementById('currentApiServer').textContent = apiUrl || 'Not set';
+            
+            const isCrossOrigin = window.location.origin !== apiUrl;
+            document.getElementById('corsStatus').textContent = isCrossOrigin ? 
+                'CROSS-ORIGIN (CORS policies will apply)' : 
+                'SAME-ORIGIN (no CORS restrictions)';
+            document.getElementById('corsStatus').style.color = isCrossOrigin ? '#ff9800' : '#4CAF50';
+            
+            // Update Private Network Access status
+            updatePrivateNetworkStatus(apiUrl);
+        }
+        
+        function updatePrivateNetworkStatus(apiUrl) {
+            if (typeof window.analyzePrivateNetworkAccess !== 'undefined' && apiUrl) {
+                const analysis = window.analyzePrivateNetworkAccess(window.location.origin, apiUrl);
+                const statusElement = document.getElementById('privateNetworkStatus');
+                
+                if (analysis.needsPrivateNetworkPreflight) {
+                    statusElement.textContent = `${analysis.scenario} - PREFLIGHT REQUIRED`;
+                    statusElement.style.color = '#ff5722';
+                } else {
+                    statusElement.textContent = `${analysis.scenario} - No preflight needed`;
+                    statusElement.style.color = '#4CAF50';
+                }
+            }
+        }
+          // Update status on page load and when API URL changes
+        updateCorsStatus();
+        document.getElementById('apiUrl').addEventListener('input', updateCorsStatus);
+        
+        // Also update when the apirequests script loads
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(updateCorsStatus, 100); // Small delay to ensure the analyzePrivateNetworkAccess function is loaded
+        });
+    </script>
+
+    <!-- Load the unified script once -->
+    <script src="apirequests"></script>
+</body>
+</html>

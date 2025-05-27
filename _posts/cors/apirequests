@@ -1,0 +1,758 @@
+// ========================================================================
+// API REQUESTS SCRIPT - Redesigned CORS Demo Script with History & Visual Feedback
+// ========================================================================
+//
+// PRIVATE NETWORK ACCESS PREFLIGHT:
+// Private Network Access preflight can occur even in Same-Origin Policy (SOP) scenarios
+// when requests cross network privacy boundaries:
+//
+// • Public → Private: Public website accessing private network (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+// • Private → Localhost: Private network accessing localhost (127.0.0.1, ::1)
+// • Public → Localhost: Public website accessing localhost
+//
+// These preflight requests include the header:
+// "Access-Control-Request-Private-Network: true"
+//
+// Server must respond with:
+// "Access-Control-Allow-Private-Network: true"
+//
+// This security feature operates independently of same-origin policy and focuses on
+// network privacy boundaries rather than domain matching.
+// ========================================================================
+
+// Request History Management
+const HISTORY_KEY = 'corsApiRequestHistory';
+const MAX_HISTORY = 20;
+let requestHistory = [];
+let currentHistoryIndex = -1;
+
+// Request State Management
+let currentAbortController = null;
+let isRequestRunning = false;
+
+// Load history from localStorage
+function loadHistory() {
+    try {
+        const saved = localStorage.getItem(HISTORY_KEY);
+        if (saved) {
+            requestHistory = JSON.parse(saved);
+        }
+    } catch (e) {
+        console.warn('Failed to load request history:', e);
+        requestHistory = [];
+    }
+    updateHistoryNavigation();
+}
+
+// Save history to localStorage
+function saveHistory() {
+    try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(requestHistory));
+    } catch (e) {
+        console.warn('Failed to save request history:', e);
+    }
+}
+
+// Add request to history
+function addToHistory(apiUrl, requestPath, useAuth, username, password) {
+    const historyItem = {
+        apiUrl: apiUrl,
+        requestPath: requestPath,
+        useAuth: useAuth,
+        username: username || '',
+        password: password || '', // Store password (will be masked in display)
+        timestamp: new Date().toISOString()
+    };
+    
+    // Remove duplicates (same apiUrl + requestPath + auth combination)
+    requestHistory = requestHistory.filter(item => 
+        !(item.apiUrl === apiUrl && item.requestPath === requestPath && item.useAuth === useAuth)
+    );
+    
+    // Add to beginning
+    requestHistory.unshift(historyItem);
+    
+    // Keep only last MAX_HISTORY items
+    if (requestHistory.length > MAX_HISTORY) {
+        requestHistory = requestHistory.slice(0, MAX_HISTORY);
+    }
+    
+    currentHistoryIndex = -1; // Reset to newest
+    saveHistory();
+    updateHistoryNavigation();
+}
+
+// Navigate history
+function navigateHistory(direction) {
+    if (requestHistory.length === 0) return;
+    
+    if (direction === 'prev') {
+        if (currentHistoryIndex < requestHistory.length - 1) {
+            currentHistoryIndex++;
+        }
+    } else if (direction === 'next') {
+        if (currentHistoryIndex > -1) {
+            currentHistoryIndex--;
+        }
+    }
+    
+    loadHistoryItem();
+    updateHistoryNavigation();
+}
+
+// Load history item into form
+function loadHistoryItem() {
+    if (currentHistoryIndex === -1 || currentHistoryIndex >= requestHistory.length) return;
+    
+    const item = requestHistory[currentHistoryIndex];
+    document.getElementById('apiUrl').value = item.apiUrl;
+    document.getElementById('requestPath').value = item.requestPath;
+    document.getElementById('useAuth').checked = item.useAuth;
+    
+    if (item.useAuth) {
+        document.getElementById('username').value = item.username || '';
+        document.getElementById('password').value = item.password || '';
+    }
+    
+    // Update CORS status
+    if (typeof updateCorsStatus === 'function') {
+        updateCorsStatus();
+    }
+}
+
+// Update navigation button states
+function updateHistoryNavigation() {
+    const prevBtn = document.getElementById('historyPrev');
+    const nextBtn = document.getElementById('historyNext');
+    const indicator = document.getElementById('historyIndicator');
+    
+    if (prevBtn && nextBtn && indicator) {
+        prevBtn.disabled = requestHistory.length === 0 || currentHistoryIndex >= requestHistory.length - 1;
+        nextBtn.disabled = requestHistory.length === 0 || currentHistoryIndex <= -1;
+        
+        if (requestHistory.length === 0) {
+            indicator.textContent = 'No history';
+        } else {
+            const position = currentHistoryIndex === -1 ? 'Current' : `${currentHistoryIndex + 1}/${requestHistory.length}`;
+            indicator.textContent = position;
+        }
+    }
+}
+
+// Visual feedback functions
+function setExecuteButtonToLoading() {
+    const executeBtn = document.getElementById('executeBtn');
+    if (executeBtn) {
+        executeBtn.innerHTML = '<span class="loading-indicator">⏳</span>Cancel Request';
+        executeBtn.className = 'cancel-btn';
+        executeBtn.onclick = cancelRequest;
+        isRequestRunning = true;
+    }
+}
+
+function setExecuteButtonToReady() {
+    const executeBtn = document.getElementById('executeBtn');
+    if (executeBtn) {
+        executeBtn.innerHTML = '🚀 Execute Request';
+        executeBtn.className = 'execute-btn';
+        executeBtn.onclick = executeRequest;
+        isRequestRunning = false;
+    }
+}
+
+function cancelRequest() {
+    if (currentAbortController) {
+        currentAbortController.abort();
+        currentAbortController = null;
+    }
+    
+    const requestPath = document.getElementById('requestPath').value.trim() || 'unknown';
+    window.logResponse(requestPath, { 
+        message: 'Request cancelled by user',
+        status: 'CANCELLED'
+    }, false, false);
+    
+    setExecuteButtonToReady();
+}
+
+// Keyboard navigation for request path field
+function setupKeyboardNavigation() {
+    const requestPathField = document.getElementById('requestPath');
+    if (requestPathField) {
+        requestPathField.addEventListener('keydown', function(event) {
+            if (event.key === 'ArrowUp') {
+                // Always prevent cursor movement and navigate to previous request
+                event.preventDefault();
+                navigateHistory('prev');
+            } else if (event.key === 'ArrowDown') {
+                // Always prevent cursor movement and navigate to next request
+                event.preventDefault();
+                navigateHistory('next');
+            }
+        });
+    }
+}
+
+// Shared utility functions
+if (typeof window.getAuthHeader === 'undefined') {    window.getAuthHeader = function() {
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
+        
+        if (!username || !password) {
+            return null;
+        }
+        
+        const credentials = btoa(username + ':' + password);
+        return 'Basic ' + credentials;
+    };
+}
+
+// Private Network Access detection utility
+if (typeof window.analyzePrivateNetworkAccess === 'undefined') {
+    window.analyzePrivateNetworkAccess = function(pageOrigin, targetUrl) {
+        const getAddressSpace = (url) => {
+            try {
+                const urlObj = new URL(url);
+                const hostname = urlObj.hostname;
+                
+                // Check for localhost
+                if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+                    return 'localhost';
+                }
+                
+                // Check for private IP ranges (RFC 1918)
+                if (hostname.match(/^10\./) || 
+                    hostname.match(/^192\.168\./) || 
+                    hostname.match(/^172\.(1[6-9]|2[0-9]|3[01])\./) ||
+                    hostname.match(/^169\.254\./) || // Link-local
+                    hostname.match(/^fc00:/) || hostname.match(/^fd00:/)) { // IPv6 private
+                    return 'private';
+                }
+                
+                // Everything else is considered public
+                return 'public';
+            } catch (e) {
+                return 'unknown';
+            }
+        };
+        
+        const pageSpace = getAddressSpace(pageOrigin);
+        const targetSpace = getAddressSpace(targetUrl);
+        
+        // Private Network Access preflight is triggered when going from less private to more private
+        const needsPreflight = (pageSpace === 'public' && (targetSpace === 'private' || targetSpace === 'localhost')) ||
+                              (pageSpace === 'private' && targetSpace === 'localhost');
+        
+        return {
+            pageAddressSpace: pageSpace,
+            targetAddressSpace: targetSpace,
+            needsPrivateNetworkPreflight: needsPreflight,
+            scenario: `${pageSpace} → ${targetSpace}`,
+            note: needsPreflight ? 
+                'Private Network Access preflight required (Access-Control-Request-Private-Network: true)' :
+                'No Private Network Access preflight needed'
+        };
+    };
+}
+
+if (typeof window.logResponse === 'undefined') {
+    window.logResponse = function(endpoint, data, success = true, includeAuth = false) {
+        const responseLog = document.getElementById('responseLog');
+        const timestamp = new Date().toLocaleTimeString();
+        const status = success ? 'SUCCESS' : 'ERROR';
+        const authInfo = includeAuth ? ' [WITH AUTH]' : ' [NO AUTH]';
+        const apiUrl = document.getElementById('apiUrl').value;
+        const isCrossOrigin = window.location.origin !== apiUrl;
+        const originType = isCrossOrigin ? 'CROSS-ORIGIN' : 'SAME-ORIGIN';
+        
+        // Enhanced logging with better categorization and educational content
+        let entry = `[${timestamp}] ${originType} → ${endpoint}${authInfo}: ${status}\n`;
+          // Add educational context for errors
+        if (!success && data.error) {
+            const errorType = data.error.type || data.type || 'Unknown';
+            entry += window.categorizeError(data.error, errorType, isCrossOrigin);
+        }
+        
+        // Enhanced header analysis for successful responses
+        if (success && data.headers) {
+            entry += window.analyzeResponseHeaders(data.headers, isCrossOrigin);
+        }
+        
+        // Add Private Network Access analysis if available
+        if (data.privateNetworkAccess) {
+            entry += window.formatPrivateNetworkAnalysis(data.privateNetworkAccess);
+        }
+        
+        // Add reference links for educational purposes
+        if (isCrossOrigin || (data.privateNetworkAccess && data.privateNetworkAccess.needsPrivateNetworkPreflight)) {
+            entry += '\n📚 Learn More: Open preflightinfo.html for detailed CORS & PNA reference guide\n';
+        }
+        
+        entry += `\n${JSON.stringify(data, null, 2)}\n${'='.repeat(80)}\n`;
+        
+        responseLog.textContent = entry + responseLog.textContent;
+        responseLog.className = success ? 'success' : 'error';
+    };
+}
+
+// Error categorization helper
+if (typeof window.categorizeError === 'undefined') {
+    window.categorizeError = function(errorData, errorType, isCrossOrigin) {
+        let category = '';
+        let explanation = '';
+        let solution = '';
+        
+        // Handle different error data formats
+        let errorMessage = '';
+        if (typeof errorData === 'string') {
+            errorMessage = errorData;
+        } else if (errorData && typeof errorData === 'object') {
+            errorMessage = errorData.message || errorData.toString() || 'Unknown error';
+        } else {
+            errorMessage = String(errorData || 'Unknown error');
+        }
+        
+        const lowerMsg = errorMessage.toLowerCase();
+        
+        if (lowerMsg.includes('cors') || lowerMsg.includes('cross-origin')) {
+            category = '🚫 CORS ERROR';
+            explanation = 'Cross-Origin Resource Sharing policy blocked this request.';
+            solution = 'Server needs: Access-Control-Allow-Origin header with your origin.';
+        } else if (lowerMsg.includes('network') || lowerMsg.includes('fetch')) {
+            category = '🌐 NETWORK ERROR';
+            explanation = 'Request failed to reach the server.';
+            solution = 'Check if API server is running and URL is correct.';
+        } else if (lowerMsg.includes('private') || lowerMsg.includes('local')) {
+            category = '🔒 PRIVATE NETWORK ACCESS ERROR';
+            explanation = 'Browser blocked request crossing network boundaries.';
+            solution = 'Server needs: Access-Control-Allow-Private-Network: true header.';
+        } else if (errorType === 'TypeError') {
+            category = '⚠️ TYPE ERROR';
+            explanation = 'Invalid URL or request configuration.';
+            solution = 'Verify API URL format and request parameters.';
+        } else {
+            category = '❓ UNKNOWN ERROR';
+            explanation = 'Unexpected error occurred.';
+            solution = 'Check browser console for more details.';
+        }
+        
+        return `\n${category}\n${explanation}\n💡 Solution: ${solution}\n`;
+    };
+}
+
+// Response headers analysis helper
+if (typeof window.analyzeResponseHeaders === 'undefined') {
+    window.analyzeResponseHeaders = function(headers, isCrossOrigin) {
+        let analysis = '\n🔍 RESPONSE HEADERS ANALYSIS:\n';
+        
+        if (isCrossOrigin) {
+            // CORS header analysis
+            if (headers['Access-Control-Allow-Origin']) {
+                analysis += `✅ Access-Control-Allow-Origin: ${headers['Access-Control-Allow-Origin']} (CORS enabled)\n`;
+            } else {
+                analysis += `❌ Missing Access-Control-Allow-Origin (CORS will fail)\n`;
+            }
+            
+            if (headers['Access-Control-Allow-Credentials']) {
+                analysis += `✅ Access-Control-Allow-Credentials: ${headers['Access-Control-Allow-Credentials']}\n`;
+            }
+            
+            if (headers['Access-Control-Allow-Private-Network']) {
+                analysis += `✅ Access-Control-Allow-Private-Network: ${headers['Access-Control-Allow-Private-Network']} (PNA enabled)\n`;
+            }
+            
+            if (headers['Access-Control-Expose-Headers']) {
+                analysis += `📋 Exposed Headers: ${headers['Access-Control-Expose-Headers']}\n`;
+            }
+        } else {
+            analysis += '✅ Same-origin request - no CORS headers needed\n';
+        }
+        
+        // Standard headers
+        if (headers['Content-Type']) {
+            analysis += `📄 Content-Type: ${headers['Content-Type']}\n`;
+        }
+        
+        return analysis;
+    };
+}
+
+// Private Network Access analysis formatter
+if (typeof window.formatPrivateNetworkAnalysis === 'undefined') {
+    window.formatPrivateNetworkAnalysis = function(pnaData) {
+        let analysis = '\n🌐 PRIVATE NETWORK ACCESS ANALYSIS:\n';
+        analysis += `📍 Address Spaces: ${pnaData.scenario}\n`;
+        analysis += `🔒 Preflight Required: ${pnaData.needsPrivateNetworkPreflight ? 'YES' : 'NO'}\n`;
+        analysis += `💭 ${pnaData.note}\n`;
+        
+        if (pnaData.needsPrivateNetworkPreflight) {
+            analysis += '⚠️  Server must respond to preflight with: Access-Control-Allow-Private-Network: true\n';
+        }
+        
+        return analysis;
+    };
+}
+
+// Request error diagnosis helper
+if (typeof window.diagnoseRequestError === 'undefined') {
+    window.diagnoseRequestError = function(error, isCrossOrigin, useAuth) {
+        const errorMsg = error.message.toLowerCase();
+        
+        if (errorMsg.includes('cors') || errorMsg.includes('cross-origin')) {
+            return {
+                category: 'CORS_ERROR',
+                severity: 'HIGH',
+                cause: 'Server missing or incorrect Access-Control-Allow-Origin header',
+                solution: isCrossOrigin ? 
+                    'Add CORS headers on server: Access-Control-Allow-Origin, Access-Control-Allow-Methods' :
+                    'Unexpected CORS error in same-origin request - check server configuration',
+                devToolsHint: 'Check Console tab for specific CORS error message'
+            };
+        } else if (errorMsg.includes('failed to fetch') || errorMsg.includes('network')) {
+            return {
+                category: 'NETWORK_ERROR',
+                severity: 'HIGH',
+                cause: 'Unable to reach the server - connection failed',
+                solution: 'Verify API server is running, URL is correct, and no firewall blocking',
+                devToolsHint: 'Check Network tab - request may show as failed or cancelled'
+            };
+        } else if (errorMsg.includes('private') || errorMsg.includes('local')) {
+            return {
+                category: 'PRIVATE_NETWORK_ACCESS_ERROR',
+                severity: 'HIGH',
+                cause: 'Browser blocked request crossing network security boundaries',
+                solution: 'Server needs Access-Control-Allow-Private-Network: true header',
+                devToolsHint: 'Look for Private Network Access messages in Console'
+            };
+        } else if (error.name === 'TypeError') {
+            return {
+                category: 'REQUEST_CONFIGURATION_ERROR',
+                severity: 'MEDIUM',
+                cause: 'Invalid URL format or request parameters',
+                solution: 'Check API URL format, ensure protocol (http/https) is included',
+                devToolsHint: 'Error details should appear in Console tab'
+            };
+        } else if (errorMsg.includes('timeout')) {
+            return {
+                category: 'TIMEOUT_ERROR',
+                severity: 'MEDIUM',
+                cause: 'Request took too long to complete',
+                solution: 'Check server performance, network connection, or increase timeout',
+                devToolsHint: 'Network tab will show timing details'
+            };
+        } else {
+            return {
+                category: 'UNKNOWN_ERROR',
+                severity: 'MEDIUM',
+                cause: 'Unexpected error occurred',
+                solution: 'Check browser console for more detailed error information',
+                devToolsHint: 'Open DevTools Console and Network tabs for additional context'
+            };
+        }
+    };
+}
+
+// Clear log function
+function clearLog() {
+    const responseLog = document.getElementById('responseLog');
+    if (responseLog) {
+        responseLog.textContent = 'Log cleared - ready for new requests...';
+        responseLog.className = ''; // Remove success/error classes
+    }
+}
+
+// Main execute request function
+async function executeRequest() {
+    // Prevent multiple concurrent requests
+    if (isRequestRunning) {
+        return;
+    }
+    
+    const apiUrl = document.getElementById('apiUrl').value.trim();
+    const requestPath = document.getElementById('requestPath').value.trim();
+    const useAuth = document.getElementById('useAuth').checked;
+    
+    if (!apiUrl) {
+        window.logResponse('validation', { error: 'API Server URL is required' }, false, useAuth);
+        return;
+    }
+    
+    if (!requestPath) {
+        window.logResponse('validation', { error: 'Request Path is required' }, false, useAuth);
+        return;
+    }
+    
+    // Set visual feedback
+    setExecuteButtonToLoading();
+    
+    // Create abort controller for cancellation
+    currentAbortController = new AbortController();
+    
+    const fullUrl = apiUrl + requestPath;
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+      // Handle authentication
+    if (useAuth) {
+        // First, try to get credentials from form fields
+        const authHeader = window.getAuthHeader();
+        if (authHeader) {
+            headers['Authorization'] = authHeader;
+            console.log('✅ Using credentials from form fields');
+        } else {
+            // Check if fields have any content (for debugging)
+            const currentUsername = document.getElementById('username').value.trim();
+            const currentPassword = document.getElementById('password').value.trim();
+            console.log('❌ Form fields check:', { 
+                username: currentUsername ? `"${currentUsername.substring(0,3)}..."` : 'empty',
+                password: currentPassword ? '[has content]' : 'empty'
+            });
+            
+            // Auto-prompt for credentials when needed
+            const username = prompt('Enter username for authentication:');
+            const password = prompt('Enter password for authentication:');
+            
+            if (username && password) {
+                // Fill the form fields
+                document.getElementById('username').value = username.trim();
+                document.getElementById('password').value = password.trim();
+                
+                const credentials = btoa(username.trim() + ':' + password.trim());
+                headers['Authorization'] = 'Basic ' + credentials;
+                
+                window.logResponse(requestPath, { 
+                    message: 'Auto-prompted for credentials and proceeding with request...',
+                    username: username.trim()
+                }, true, useAuth);
+            } else {
+                window.logResponse(requestPath, { error: 'Authentication cancelled - please enter username and password' }, false, useAuth);
+                setExecuteButtonToReady();
+                return;
+            }
+        }
+    }
+    
+    // Add to history before making the request
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    addToHistory(apiUrl, requestPath, useAuth, username, password);
+    
+    // Determine credentials mode based on auth and cross-origin status
+    const isCrossOrigin = window.location.origin !== apiUrl;
+    const credentials = useAuth ? 'include' : 'omit';
+    
+    const options = {
+        method: 'GET',
+        headers: headers,
+        credentials: credentials,
+        signal: currentAbortController.signal
+    };
+      try {
+        const originType = isCrossOrigin ? 'CROSS-ORIGIN' : 'SAME-ORIGIN';
+        
+        // Analyze Private Network Access scenario
+        const privateNetworkAnalysis = window.analyzePrivateNetworkAccess(window.location.origin, fullUrl);
+        
+        // Check if request would normally need a preflight
+        const wouldNormallyNeedPreflight = (
+            options.method !== 'GET' && options.method !== 'POST' && options.method !== 'HEAD'
+        ) || (
+            Object.keys(headers).some(key => 
+                !['accept', 'accept-language', 'content-language', 'content-type'].includes(key.toLowerCase())
+            )
+        ) || (
+            credentials === 'include' && isCrossOrigin
+        );
+        
+        const willTriggerPreflight = wouldNormallyNeedPreflight || 
+                                   (isCrossOrigin && privateNetworkAnalysis.needsPrivateNetworkPreflight);
+          // Immediate log output to show request is starting with enhanced context
+        window.logResponse(requestPath, { 
+            message: `🚀 STARTING ${originType} GET request...`,
+            requestAnalysis: {
+                url: fullUrl,
+                method: 'GET',
+                crossOrigin: isCrossOrigin,
+                credentialsMode: credentials,
+                authenticationUsed: useAuth
+            },
+            preflightAnalysis: {
+                normallyNeedsPreflight: wouldNormallyNeedPreflight,
+                privateNetworkForcesPreflight: privateNetworkAnalysis.needsPrivateNetworkPreflight,
+                willTriggerPreflight: willTriggerPreflight,
+                preflightReason: willTriggerPreflight ? 
+                    (wouldNormallyNeedPreflight ? 'Standard CORS requirements (auth/headers)' : 'Private Network Access boundary crossing') :
+                    'Simple GET request - no preflight needed',
+                note: willTriggerPreflight ? 
+                    '⚠️  Browser will send OPTIONS preflight first (invisible to JavaScript)' :
+                    '✅ Direct request - browser will send GET immediately'
+            },
+            corsExpectation: isCrossOrigin ? {
+                required: true,
+                expectedHeaders: [
+                    'Access-Control-Allow-Origin (required)',
+                    useAuth ? 'Access-Control-Allow-Credentials: true (for auth)' : null,
+                    privateNetworkAnalysis.needsPrivateNetworkPreflight ? 'Access-Control-Allow-Private-Network: true (for PNA)' : null
+                ].filter(Boolean),
+                risk: useAuth ? 'HIGH (credentials + cross-origin)' : 'MEDIUM (cross-origin only)'
+            } : {
+                required: false,
+                note: 'Same-origin request - no CORS restrictions apply'
+            },
+            pageOrigin: window.location.origin,
+            apiServer: apiUrl,
+            status: 'EXECUTING',
+            privateNetworkAccess: privateNetworkAnalysis
+        }, true, useAuth);
+        
+        const response = await fetch(fullUrl, options);
+        
+        let responseBody;
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            responseBody = await response.json();
+        } else {
+            responseBody = await response.text();
+        }        // Collect available response headers 
+        // NOTE: Preflight responses (OPTIONS) are handled entirely by the browser and
+        // are invisible to JavaScript. Headers like Access-Control-Allow-Methods and 
+        // Access-Control-Allow-Headers only appear in preflight, never in main responses.
+        // To see preflight details, use Browser DevTools Network tab.
+        const availableHeaders = {};
+        const headerList = [
+            'Access-Control-Allow-Origin',      // Main response header
+            'Access-Control-Allow-Credentials', // Main response header
+            'Access-Control-Expose-Headers',    // Main response header  
+            'Access-Control-Allow-Private-Network', // Main response header (if needed)
+            'Content-Type',                     // Standard response header
+            'Content-Length',                   // Standard response header
+            'Server'                            // Standard response header
+        ];
+        
+        headerList.forEach(headerName => {
+            const headerValue = response.headers.get(headerName);
+            if (headerValue !== null) {
+                availableHeaders[headerName] = headerValue;
+            }
+        });
+          // Enhanced response data with educational analysis
+        const responseData = {
+            message: `✅ ${originType} request completed successfully`,
+            response: {
+                status: response.status,
+                statusText: response.statusText,
+                url: response.url,
+                ok: response.ok
+            },
+            headers: availableHeaders,
+            corsAnalysis: isCrossOrigin ? {
+                status: 'CROSS-ORIGIN REQUEST SUCCEEDED',
+                explanation: 'Server provided proper CORS headers allowing this request',
+                headersFound: Object.keys(availableHeaders).filter(h => h.startsWith('Access-Control')),
+                compliance: availableHeaders['Access-Control-Allow-Origin'] ? 'COMPLIANT' : 'NON-COMPLIANT'
+            } : {
+                status: 'SAME-ORIGIN REQUEST',
+                explanation: 'No CORS restrictions applied - same protocol, domain, and port'
+            },
+            networkSecurity: {
+                originType: originType,
+                credentialsMode: credentials,
+                authenticationUsed: useAuth,
+                securityRisk: useAuth && isCrossOrigin ? 'ELEVATED (cross-origin + credentials)' : 'STANDARD'
+            },
+            privateNetworkAccess: privateNetworkAnalysis,
+            performance: {
+                note: willTriggerPreflight ? 
+                    'This request may have included a preflight (OPTIONS) - check Network tab for timing' :
+                    'Direct request - no preflight overhead'
+            },
+            body: responseBody
+        };
+        
+        window.logResponse(requestPath, responseData, response.ok, useAuth);
+        
+    } catch (error) {
+        // Check if request was aborted
+        if (error.name === 'AbortError') {
+            // Request was cancelled, no need to log again (already logged in cancelRequest)
+            return;
+        }
+          const isCrossOrigin = window.location.origin !== apiUrl;
+        const originType = isCrossOrigin ? 'CROSS-ORIGIN' : 'SAME-ORIGIN';
+        
+        // Enhanced error analysis with educational context
+        const errorAnalysis = {
+            message: `❌ ${originType} request failed`,
+            error: {
+                message: error.message,
+                type: error.name,
+                timestamp: new Date().toISOString()
+            },
+            context: {
+                originType: originType,
+                isCrossOrigin: isCrossOrigin,
+                credentialsMode: credentials,
+                authenticationAttempted: useAuth,
+                url: fullUrl
+            },
+            diagnosis: window.diagnoseRequestError(error, isCrossOrigin, useAuth),
+            privateNetworkAccess: window.analyzePrivateNetworkAccess(window.location.origin, apiUrl),
+            troubleshooting: {
+                step1: 'Check if API server is running and accessible',
+                step2: isCrossOrigin ? 'Verify CORS headers on server' : 'Check server logs for errors',
+                step3: 'Open Browser DevTools → Network tab for detailed information',
+                step4: 'See preflightinfo.html for CORS & PNA reference guide'
+            }
+        };
+        
+        window.logResponse(requestPath, errorAnalysis, false, useAuth);
+    } finally {
+        // Reset button state
+        setExecuteButtonToReady();
+        currentAbortController = null;
+    }
+}
+
+// Prefill functions - only set request paths, leave authentication settings untouched
+function prefillPublic() {
+    document.getElementById('requestPath').value = '/';
+}
+
+function prefillSecured() {
+    document.getElementById('requestPath').value = '/demo/countries';
+}
+
+function prefillPrivateNetwork() {
+    document.getElementById('requestPath').value = '/demo/districts';
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const origin = window.location.origin;
+    
+    // Load request history
+    loadHistory();
+    
+    // Set up keyboard navigation
+    setupKeyboardNavigation();
+      window.logResponse('initialization', { 
+        message: 'Enhanced CORS API Request Tester loaded successfully',
+        features: [
+            '🔍 Advanced response header analysis',
+            '🎯 Intelligent error categorization with solutions',
+            '🌐 Private Network Access (PNA) detection & analysis',
+            '📚 Educational context with troubleshooting guides',
+            '⌨️  Keyboard navigation with request history',
+            '🔗 Integrated with CORS & PNA reference guide'
+        ],
+        pageOrigin: origin,
+        historyCount: requestHistory.length,
+        quickStart: {
+            crossOriginTest: 'Change API Server URL to different port/domain',
+            devTools: 'Open F12 → Network tab to see preflight requests',
+            reference: 'Click reference guide link for detailed scenarios',
+            navigation: 'Use ↑/↓ arrows in Request Path for history'
+        },
+        note: 'Enhanced with intelligent analysis and educational feedback for better CORS/PNA understanding'
+    }, true, false);
+});

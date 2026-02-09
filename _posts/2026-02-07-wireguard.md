@@ -27,7 +27,7 @@ And then create config file to be imported by network managar f.e.
 ~~~cmd
 [Interface]
 PrivateKey = <content of keyx_priv>
-Address = 10.1.1.5/24
+Address = 10.1.1.5/32
 
 [Peer]
 PublicKey = <content of public key of peer to connect to>
@@ -78,3 +78,61 @@ echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
 sysctl -p
 ~~~
+
+
+
+
+## Some info for cidr notation of Address and AllowedIPs as I got them via chatgpt:
+
+Cidr in address is to inform OS that link is part of segment and other
+addresses are directly reachable - most commonly on ethernet via L2 ARP
+protocol. So OS usually create LINK entry in route table to direct
+such packets here.
+
+Now wireguard is only point to point device on L3 level - so working
+via ip addresses. While it can and is used to simulate virtual LAN,
+it is not really LAN - no broadcast, no ARP, no L2 discovery.
+Each peer is a single logical endpoint.
+
+When packet ends in wg interface stack the device will do
+what is programmed to do - compare it with allowedips and if is in range
+then sent it forward via tunnel. So even if client misconfigured
+cidr in address it will work. But it is still misconfitured and fragile.
+Ultimate rules what goes to wg VPN endpoint here are AllowedIPs.
+
+# CLIENT
+
+32 CIDR in Address field is most commonly right value.
+24 or less in AllowedIPs routes those addresses via VPN. But here can
+be whateever traffic client wants to go via VPN. This field can
+be multiple times in configuration.
+
+# SERVER
+
+in hub and spoke scenario server maintain set of peers which usually wants to communicate each other.
+So 24 CIDR in Address field here is ok and expected - this device is really next hop for such packets.
+AllowedIPs of each peer is expected to have 32 CIDR on other hand as this
+device routes individual traffic between peers.
+
+This is common scenario of simulating vlan with wg(but as is written above wg will never
+behave like real lan). There are of course many other scenarios but I wanted to have just
+one segment for small amount of peers to communicate each other. I added last paragraph to
+understand what purpose cidr in address and allowedips serves.
+
+Cidr in address has nothing to do with wireguard internals - it is common thing to setup network
+interfaces and behavior depends on target interface. Real ethernet device will sent packet via ARP,
+wg will just process it as is programmed(decide based on allowedips if route it via vpn) 
+and other net devices will follow their own rules.
+
+Cidr in allowedips is purelly to route traffic via VPN (and on incomming side verify agains source IP).
+So routes based on allowedips are added to routing table too. Both places
+participates in routing table but each one from different reasons. And this is why is difficult
+to find a problem, because misconfigured devices still can sometimes work as expected
+and sometimes not.
+
+
+
+
+
+
+

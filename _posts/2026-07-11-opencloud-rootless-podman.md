@@ -653,6 +653,11 @@ filesystem_folder = /data/collections
 [logging]
 level = info
 mask_passwords = True
+
+[web]
+type = internal
+prefer_browser_login = True
+
 ~~~
 
 ### Start service

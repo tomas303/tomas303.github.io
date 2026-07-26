@@ -5,21 +5,25 @@ date:   2026-07-11 01:00:00
 categories: opencloud authelia podman
 ---
 
-It's intended mainly to document setup of opencloud connected via authelia provider with lldap as ldap backend.
-So this is free list of steps to be done to have it working. As a domain here I use auth.tomho.eu for authelia
-authentication, cloud.tomho.eu for opencloud access and cal.tomho.eu for calendar.
-You should change it to your domain.
+It's intended mainly to document the setup of OpenCloud connected via an Authelia provider with lldap as the LDAP backend.
+So this is just a list of steps to be done to have it working. As a domain here I use auth.tomho.eu for Authelia
+authentication, cloud.tomho.eu for OpenCloud access and cal.tomho.eu for the calendar.
+You should change it to your own domain.
 
 This comes with no guarantee - it may contain errors and is meant mainly as inspiration, not a fully tested guide.
 
-All services will run under dedicated podman user using quadlets definition files. I use debian trixie actually
-so all commands will be tested against it.
+All services run under a dedicated podman user using quadlet definition files. I use Debian Trixie,
+so all commands were tested against it.
+
+I have added yet another domain, dav.tomho.eu. The original cal.tomho.eu is now directed to Authelia's cookie authentication and serves for logging in to the Radicale web UI, while
+dav.tomho.eu is authenticated by Authelia via Basic Auth. The Thunderbird calendar client expects a WWW-Authenticate header in return, but Authelia only adds it as the result of a failed
+last authentication mechanism - which must be Basic Auth in this case. So that's the reason why I split it up into 2 separate domains, and DAV clients should use dav.tomho.eu.
 
 
 ## Prepare user under which services will run and directory structure
 
 
-Add dedicated user(-m for creating home dir):
+Add a dedicated user (-m for creating home dir):
 ~~~sh
 useradd -m opencloud
 ~~~
@@ -29,16 +33,16 @@ Set some password:
 passwd opencloud
 ~~~
 
-And set enable-linger so services can run after logout:
+And enable linger so services can keep running after logout:
 ~~~sh
 loginctl enable-linger opencloud
 ~~~
 
-Now login under the new user. 17170 is used by lldap and via mapping we can manage
-it from our computer. User needs to be in AllowUsers in /etc/ssh/sshd_config
-to be able to logon remotely.
+Now log in as the new user. Port 17170 is used by lldap, and via port mapping we can manage
+it from our computer. The user needs to be listed in AllowUsers in /etc/ssh/sshd_config
+to be able to log in remotely.
 ~~~sh
-ssh -L 17170:localhost:17170 -p <when using nonstandart port> 'opencloud@tomho.eu'
+ssh -L 17170:localhost:17170 -p <when using nonstandard port> 'opencloud@tomho.eu'
 ~~~
 
 Create all needed directories:
@@ -58,7 +62,7 @@ mkdir -p containers/radicale/data
 
 ## Add podman network which will be shared among all containers
  
-Add quadlet definiton of network open into .config/containers/systemd/opencloud.network:
+Add the quadlet definition of the network into .config/containers/systemd/opencloud.network:
 ~~~ini
 [Network]
 NetworkName=opencloud
@@ -75,7 +79,7 @@ systemctl --user start opencloud-network.service
 
 ### Generate secrets
 
-Generate secrets used by lldap container(- means read from input):
+Generate secrets used by the lldap container (- means read from input):
 ~~~sh
 openssl rand -hex 64 | podman secret create lldap-key-seed -
 openssl rand -hex 64 | podman secret create lldap-jwt-secret -
@@ -86,7 +90,7 @@ openssl rand -hex 64 | podman secret create lldap-ldap-user-pass -
 
 ### Quadlet definition
 
-Add quadlet definition of lldap into .config/containers/systemd/lldap.container:
+Add the quadlet definition of lldap into .config/containers/systemd/lldap.container:
 ~~~ini
 [Unit]
 Description=LLDAP
@@ -105,7 +109,7 @@ Network=opencloud.network
 Environment=UID=1000
 Environment=GID=1000
 Environment=LLDAP_LDAP_BASE_DN=dc=tomho,dc=eu
-Environment=LLDAP_LDAP_USER_EMAIL=tomashorak@post.cz
+Environment=LLDAP_LDAP_USER_EMAIL=<email for admin if bootstrap is creating one>
 
 # set secrets
 Environment=LLDAP_KEY_SEED_FILE=/run/secrets/lldap-key-seed
@@ -142,27 +146,27 @@ WantedBy=default.target
 
 ### Start service
 
-Uncomment bootstrapping section and run it first time:
+Uncomment the bootstrapping section and run it for the first time:
 ~~~sh
 systemctl --user daemon-reload
 systemctl --user start lldap.service
 ~~~
 
 Then stop the service, comment it out again, and repeat the steps above. Or you can just leave it commented,
-connect to admin console and create admin account directly.
+connect to the admin console and create an admin account directly.
 
 
 ### Retrieve the generated password
 
-You can use your own password for lldap-ldap-user-pass or any other instead of running rand.
-In case you didn't use it and need to know generated one, attach to running container and cat
+You can use your own password for lldap-ldap-user-pass instead of generating a random one.
+If you didn't do that and need to know the generated password, attach to the running container and cat
 it:
 ~~~sh
 podman exec -it lldap /bin/sh
 cat /run/secrets/lldap-ldap-user-pass
 ~~~
 
-You can access lldap admin console now via http://localhost:17170(mapped via ssh -L param).
+You can now access the lldap admin console via http://localhost:17170 (mapped via the ssh -L parameter).
 
 
 
@@ -172,7 +176,7 @@ You can access lldap admin console now via http://localhost:17170(mapped via ssh
 
 ### Quadlet definition
 
-Add quadlet definition of authelia into .config/containers/systemd/authelia.container:
+Add the quadlet definition of authelia into .config/containers/systemd/authelia.container:
 ~~~ini
 [Unit]
 Description=Authelia
@@ -200,7 +204,7 @@ WantedBy=default.target
 
 ### Configuration file
 
-Add configuration into containers/authelia/config/configuration.yml:
+Add the configuration into containers/authelia/config/configuration.yml:
 ~~~yml
 ###############################################################
 #                 Authelia Core Configuration                 #
@@ -211,8 +215,19 @@ server:
 
   endpoints:
     authz:
+
       forward-auth:
         implementation: 'ForwardAuth'
+        authn_strategies:
+          - name: 'HeaderAuthorization'
+            schemes:
+              - 'Basic'
+            scheme_basic_cache_lifespan: 0
+
+      forward-auth-browser:
+        implementation: 'ForwardAuth'
+        authn_strategies:
+          - name: 'CookieSession'
 
 #log:  
 #  level: 'trace'
@@ -250,6 +265,8 @@ access_control:
       policy: 'one_factor'
     - domain: 'cal.tomho.eu'
       policy: 'one_factor'
+    - domain: 'dav.tomho.eu'
+      policy: 'one_factor'
 
 # Domain Session configuration
 session:
@@ -269,6 +286,11 @@ identity_providers:
       refresh_token: '24 hours'
       access_token: '1 hour'
       id_token: '1 hour'
+      custom:
+        lifespan_mobile:
+          refresh_token: '60 days'
+          access_token: '1 hour'
+          id_token: '1 hour'
     cors:
       endpoints:
         - authorization
@@ -316,7 +338,7 @@ identity_providers:
       - client_id: opencloud
         client_name: OpenCloud
         public: true
-        claims_policy: default_policy
+        claims_policy: opencloud_policy
         authorization_policy: one_factor
         access_token_signed_response_alg: RS256
         grant_types:
@@ -331,13 +353,15 @@ identity_providers:
           - profile
           - email
           - groups
-        claims_policy: opencloud_policy
       # ────────────────────────────────────────────────────────────────────────────
 
       # ── OpenCloud Android app ─────────────────────────────────────────────────
       - client_id: OpenCloudAndroid
+      - client_id: OpenCloudAndroid
         client_name: OpenCloud Android
         public: true
+        claims_policy: opencloud_policy
+        lifespan: lifespan_mobile
         authorization_policy: one_factor
         access_token_signed_response_alg: RS256
         id_token_signed_response_alg: RS256
@@ -356,14 +380,13 @@ identity_providers:
           - email
           - offline_access
           - groups
-        claims_policy: opencloud_policy
       # ────────────────────────────────────────────────────────────────────────────
 
       # ── OpenCloud Desktop client ──────────────────────────────────────────────
       - client_id: OpenCloudDesktop
         client_name: OpenCloud Desktop
         public: true
-        claims_policy: default_policy
+        claims_policy: opencloud_policy
         authorization_policy: one_factor
         access_token_signed_response_alg: RS256
         grant_types:
@@ -380,13 +403,13 @@ identity_providers:
           - email
           - offline_access
           - groups
-        claims_policy: opencloud_policy
 
       # ── OpenCloud iOS app ─────────────────────────────────────────────────────
       - client_id: OpenCloudIOS
         client_name: OpenCloud iOS
         public: true
-        claims_policy: default_policy
+        claims_policy: opencloud_policy
+        lifespan: lifespan_mobile
         authorization_policy: one_factor
         access_token_signed_response_alg: RS256
         grant_types:
@@ -402,7 +425,6 @@ identity_providers:
           - email
           - offline_access
           - groups
-        claims_policy: opencloud_policy
 
 
 # Disable the external network time synchronization checks
@@ -413,7 +435,7 @@ ntp:
 
 ### Start service
 
-Start and stop authelia service:
+Start and stop the authelia service:
 ~~~sh
 systemctl --user daemon-reload
 systemctl --user start authelia.service
@@ -422,13 +444,13 @@ systemctl --user stop authelia.service
 
 ## Setup proxysthesis service
 
-You can see sources on https://github.com/tomas303/proxysthesis and I have created image which
-just wraps this one standalone binary. Just adds groups into scope parameter if is missing.
-Mobile apps just don't put it there and without it is impossible to use oidc login.
+You can see the sources at https://github.com/tomas303/proxysthesis. I created an image which
+just wraps this single standalone binary. It just adds groups into the scope parameter if it's missing.
+Mobile apps often don't put it there, and without it, it's impossible to use OIDC login.
 
 ### Quadlet definition
 
-Add quadlet definition of proxysthesis into .config/containers/systemd/proxysthesis.container:
+Add the quadlet definition of proxysthesis into .config/containers/systemd/proxysthesis.container:
 ~~~ini
 [Unit]
 Description=Proxysthesis (groups scope manage)
@@ -456,7 +478,7 @@ WantedBy=default.target
 
 ### Configuration file
 
-Add configuration into ./containers/proxysthesis/config/config.yaml:
+Add the configuration into ./containers/proxysthesis/config/config.yaml:
 ~~~yml
 listen: ":8831"
 upstream: "http://auth.tomho.eu:9091"
@@ -465,7 +487,7 @@ debug_traffic: false
 
 ### Start service
 
-Start proxysthesis service:
+Start the proxysthesis service:
 ~~~sh
 systemctl --user daemon-reload
 systemctl --user start proxysthesis.service
@@ -475,8 +497,8 @@ systemctl --user start proxysthesis.service
 
 ### Generate secrets
 
-First prepare two secrets - oidc is brand new so generate as usual, second one is password to lldap, so this
-can be done by echo, but don't forget -n switch, which suppresses common linebreak generation:
+First prepare two secrets - the oidc one is brand new so generate it as usual; the second one is the password
+for lldap, so this can be done with echo, but don't forget the -n switch, which suppresses the trailing linebreak:
 ~~~sh
 openssl rand -hex 64 | podman secret create opencloud-proxy-oidc-client-secret -
 echo -n 'your lldap password'  | podman secret create opencloud-oc-ldap-bind-password-secret -
@@ -484,7 +506,7 @@ echo -n 'your lldap password'  | podman secret create opencloud-oc-ldap-bind-pas
 
 ### Initialize configuration
 
-Next we have to pull opencloud's image and initialize configuration:
+Next, pull the opencloud image and initialize the configuration:
 ~~~sh
 podman pull docker.io/opencloudeu/opencloud-rolling:latest
 podman run --rm -it \
@@ -496,7 +518,7 @@ podman run --rm -it \
 
 ### Quadlet definition
 
-Add quadlet definition of opencloud into .config/containers/systemd/opencloud.container:
+Add the quadlet definition of opencloud into .config/containers/systemd/opencloud.container:
 ~~~ini
 [Unit]
 Description=open cloud 
@@ -586,7 +608,7 @@ WantedBy=default.target
 
 ### Start service
 
-Start opencloud service:
+Start the opencloud service:
 ~~~sh
 systemctl --user daemon-reload
 systemctl --user start opencloud.service
@@ -595,11 +617,11 @@ systemctl --user start opencloud.service
 ## Setup radicale service
 
 This one will use the forward-auth example from https://www.authelia.com/integration/proxies/caddy/?utm_source=chatgpt.com.
-Authelia's authz endpoint was already configured in the authelia section above.
+Authelia's authz endpoint was already configured in the Authelia section above.
 
 ### Quadlet definition
 
-Add quadlet definition of radicale into .config/containers/systemd/radicale.container:
+Add the quadlet definition of radicale into .config/containers/systemd/radicale.container:
 ~~~ini
 ###
 ### radicale - podman quadlet file
@@ -631,7 +653,7 @@ WantedBy=default.target
 
 ### Configuration file
 
-Add radicale config containers/config/config:
+Add the radicale config into containers/radicale/config/config:
 ~~~ini
 [server]
 hosts = 0.0.0.0:5232
@@ -662,7 +684,7 @@ prefer_browser_login = True
 
 ### Start service
 
-And start radicale service:
+And start the radicale service:
 ~~~sh
 systemctl --user daemon-reload
 systemctl --user start radicale.service
@@ -695,9 +717,6 @@ This Caddy configuration ties all the services together behind a single reverse 
 (auth_inject_groups) {
 	@missing_groups expression `{query}.contains("scope") && !{query.scope}.contains("groups")`
 	uri @missing_groups query scope "{query.scope} groups"
-	#respond "Test check uri: {http.request.uri}" 200 {
-	#	close
-	#}
 }
 
 # static web pages
@@ -727,7 +746,7 @@ cloud.tomho.eu {
 
 # auth provider authelia
 auth.tomho.eu {
-	# 8831 will add groups into scopes if missing - parameter aswell as body in case of token renewal
+	# 8831 will add groups into scopes if missing - as a parameter as well as in the body in case of token renewal
 	handle /api/oidc/authorization {
 		reverse_proxy http://127.0.0.1:8831 {
 			import auth_headers_up
@@ -745,10 +764,10 @@ auth.tomho.eu {
 	}
 }
 
-# radicale
+# radicale ui - authentication via cookie
 cal.tomho.eu {
 	forward_auth 127.0.0.1:9091 {
-		uri /api/authz/forward-auth
+		uri /api/authz/forward-auth-browser
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
 	}
 
@@ -756,7 +775,18 @@ cal.tomho.eu {
 		header_up X-Remote-User {http.request.header.Remote-User}
 	}
 }
-~~~
+# radicale dav - authentication via basic auth
+dav.tomho.eu {
+	forward_auth 127.0.0.1:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+		#header_up Authorization {http.request.header.Authorization}
+	}
+
+	reverse_proxy http://127.0.0.1:5232 {
+		header_up X-Remote-User {http.request.header.Remote-User}
+	}
+}~~~
 
 
 
@@ -802,7 +832,7 @@ systemctl --user start lldap.service
 
 ### lldap fixed schema people
 
-Lldap has a fixed schema - all user accounts always live under `ou=people`, no
+lldap has a fixed schema - all user accounts always live under `ou=people`, no
 matter what "group" you create through the lldap admin console (those are LDAP groups
 under `ou=groups`, not organizational units for accounts).
 
@@ -830,7 +860,7 @@ GitHub Container Registry (`ghcr.io`) can host your own small images (like proxy
 so quadlets can pull them via `Image=ghcr.io/<user>/<image>:latest` just like the `lldap`
 image above.
 
-Create a Personal Access Token (classic) with `write:packages` scope, then login:
+Create a Personal Access Token (classic) with `write:packages` scope, then log in:
 ~~~sh
 echo $GH_TOKEN | podman login ghcr.io -u <your-github-username> --password-stdin
 ~~~
@@ -846,4 +876,9 @@ podman push ghcr.io/<your-github-username>/proxysthesis:latest
 By default the pushed package is private - make it public in the package settings on
 GitHub if you want anonymous pulls, otherwise use a read-only token on the podman host
 when pulling.
+
+
+### Separate auth flows for browser vs DAV clients (Authelia + Caddy + Radicale/CalDAV)
+
+Use separate auth flows for browsers and DAV clients. The browser endpoint can use `HeaderAuthorization` + `CookieSession`; an unauthenticated browser request falls through to `CookieSession` and is redirected to the Authelia portal. DAV clients such as Thunderbird need HTTP Basic challenge/response: the initial request has no `Authorization` header, so Authelia must return `401` with `WWW-Authenticate: Basic`; Thunderbird then retries with `Authorization: Basic ...`. Therefore use a separate DAV hostname (e.g. `dav.example.com`) routed by Caddy to a Basic-only Authelia `ForwardAuth` endpoint. The hostname must also have a matching Authelia `access_control` rule such as `policy: one_factor`; otherwise anonymous initial requests are rejected with `403` before the Basic challenge can occur. The browser and DAV domains can still reverse proxy to the same Radicale instance.
 

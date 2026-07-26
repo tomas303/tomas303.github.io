@@ -242,6 +242,10 @@ authentication_backend:
     implementation: 'lldap'
     address: 'ldap://lldap:3890'
     base_dn: 'DC=tomho,DC=eu'
+    # This user is also used for password change/reset operations, so it must be a
+    # member of the lldap_password_manager (or lldap_admin) group in lldap, not just
+    # lldap_strict_readonly - otherwise Authelia's reset-password flow fails with an
+    # insufficient access rights error when it tries to write the new password.
     user: 'UID=authelia,OU=people,DC=tomho,DC=eu'
     password: 'replace with real user password'  
 
@@ -250,10 +254,24 @@ identity_validation:
     jwt_secret: 'replace f.e. with openssl rand -hex 64'
     
 
-# Intercepts reset requests and puts them in a text file instead of sending mail
+# Sends the password reset identity verification link by email. Example below uses
+# Gmail's SMTP relay - the sender must be either the authenticated Gmail account
+# itself or a verified "Send mail as" alias on that account, otherwise Gmail rejects
+# or rewrites the From header. The password can also be supplied via the
+# notifier.smtp.password secret instead of inline; with Gmail this has to be an
+# App Password (Google Account > Security > 2-Step Verification > App passwords),
+# not your normal account password.
 notifier:
-  filesystem:
-    filename: '/config/notification.txt'
+  smtp:
+    address: 'submission://smtp.gmail.com:587'
+    sender: 'Authelia <authelia@tomho.eu>'
+    username: 'replace with your gmail address'
+    password: 'replace with a Gmail app password'
+# Alternative for local testing: intercepts reset requests and writes them into a
+# text file instead of sending a real mail.
+#notifier:
+#  filesystem:
+#    filename: '/config/notification.txt'
 
 # Access parameters
 access_control:
@@ -553,6 +571,10 @@ Environment=WEB_OIDC_AUTHORITY=https://auth.tomho.eu
 Environment=WEB_OIDC_CLIENT_ID=opencloud
 Environment="WEB_OIDC_SCOPE=openid profile email groups"
 Environment=PROXY_CSP_CONFIG_FILE_LOCATION=/etc/opencloud/csp.yaml
+
+# Points the "Edit" button on the OpenCloud account page to Authelia's own
+# reset-password flow, since OpenCloud itself can't change an OIDC-managed password.
+Environment=WEB_OPTION_ACCOUNT_EDIT_LINK_HREF=https://auth.tomho.eu/reset-password/step1
 
 Environment=SETTINGS_SETUP_DEFAULT_ASSIGNMENTS="false"
 Environment=GRAPH_ASSIGN_DEFAULT_USER_ROLE=false
@@ -878,7 +900,46 @@ GitHub if you want anonymous pulls, otherwise use a read-only token on the podma
 when pulling.
 
 
+### Letting users change their own password (lldap + Authelia + OpenCloud)
+
+OpenCloud delegates login to OIDC, so it can't change a user's password itself, and lldap's
+own self-service reset page isn't exposed publicly in this setup. Authelia is the piece that
+actually performs the change: its LDAP bind user (`authelia`) is also used for password
+change operations, so as long as that user is a member of the `lldap_password_manager` (or
+`lldap_admin`) group in lldap - not just `lldap_strict_readonly` - Authelia's "Forgot
+password?" link on the login portal (`https://auth.tomho.eu/reset-password/step1`) can reset
+it directly in lldap. Each user also needs a `mail` attribute set in lldap, since Authelia
+emails an identity-verification link before allowing the change - which means the
+`notifier` has to be a real SMTP server rather than the `filesystem` one used for testing.
+To give users a shortcut from OpenCloud itself, `WEB_OPTION_ACCOUNT_EDIT_LINK_HREF` adds an
+"Edit" button on the OpenCloud account page pointing straight at that same Authelia URL.
+
+
+### Google App Passwords menu is often hidden
+
+If you're using Gmail as the SMTP relay for Authelia's notifier and can't find "App
+passwords" anywhere under Google Account > Security, even with 2-Step Verification turned
+on, that's expected - Google has been progressively hiding the menu entry for many personal
+accounts, likely because it provides a way around per-login second-factor prompts. The
+feature itself still works though: go directly to `myaccount.google.com/apppasswords`, and
+as long as 2-Step Verification is on (and Advanced Protection isn't), you can create one
+there regardless of whether it's linked from the menu.
+
+
 ### Separate auth flows for browser vs DAV clients (Authelia + Caddy + Radicale/CalDAV)
 
-Use separate auth flows for browsers and DAV clients. The browser endpoint can use `HeaderAuthorization` + `CookieSession`; an unauthenticated browser request falls through to `CookieSession` and is redirected to the Authelia portal. DAV clients such as Thunderbird need HTTP Basic challenge/response: the initial request has no `Authorization` header, so Authelia must return `401` with `WWW-Authenticate: Basic`; Thunderbird then retries with `Authorization: Basic ...`. Therefore use a separate DAV hostname (e.g. `dav.example.com`) routed by Caddy to a Basic-only Authelia `ForwardAuth` endpoint. The hostname must also have a matching Authelia `access_control` rule such as `policy: one_factor`; otherwise anonymous initial requests are rejected with `403` before the Basic challenge can occur. The browser and DAV domains can still reverse proxy to the same Radicale instance.
+Use separate auth flows for browsers and DAV clients. The browser endpoint can use
+`HeaderAuthorization` + `CookieSession`; an unauthenticated browser request falls through
+to `CookieSession` and is redirected to the Authelia portal. Thunderbird's calendar client,
+however, only completes its auth flow once Authelia responds with a
+`WWW-Authenticate: Basic` header - and Authelia only adds that header as the *fail action*
+of the Basic authentication mechanism, not of any other mechanism. As a consequence, the
+DAV endpoint's `authn_strategies` must have `HeaderAuthorization`/`Basic` configured as the
+last (or only) mechanism, so that its failure is what actually produces the
+`WWW-Authenticate` header Thunderbird needs; Thunderbird then retries with
+`Authorization: Basic ...`. Therefore use a separate DAV hostname (e.g. `dav.example.com`)
+routed by Caddy to a Basic-only Authelia `ForwardAuth` endpoint. The hostname must also
+have a matching Authelia `access_control` rule such as `policy: one_factor`; otherwise
+anonymous initial requests are rejected with `403` before the Basic challenge can occur.
+The browser and DAV domains can still reverse proxy to the same Radicale instance.
 

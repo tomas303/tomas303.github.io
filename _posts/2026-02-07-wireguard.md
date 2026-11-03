@@ -80,6 +80,21 @@ sysctl -p
 ~~~
 
 
+Tip: to set up a mobile client (e.g. the Android app) you can import the configuration via QR code.
+
+Generate the private/public keys and create a configuration per client as described above, e.g. `wg13.conf`.
+Then use `qrencode` (package `qrencode`): `-r` reads the input from the given file and `-t ANSIUTF8` renders the QR code directly in the terminal.
+Then scan it in the WireGuard app via "Add tunnel" > "Scan from QR code".
+
+~~~cmd
+qrencode -t ANSIUTF8 -r ./wg13.conf
+~~~
+
+
+
+
+
+
 
 
 ## Some info for cidr notation of Address and AllowedIPs as I got them via chatgpt:
@@ -129,10 +144,6 @@ So routes based on allowedips are added to routing table too. Both places
 participates in routing table but each one from different reasons. And this is why is difficult
 to find a problem, because misconfigured devices still can sometimes work as expected
 and sometimes not.
-
-
-
-
 
 
 

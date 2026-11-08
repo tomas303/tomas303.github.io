@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "android compile"
-date:   2023-12-25 01:00:00
+date:   2026-11-08 01:00:00
 categories: os android
 ---
 
@@ -98,6 +98,16 @@ As of now side load other apps like gapps isn't possible because
 system and other partitions are type erofs - read only filesystem.
 This is a reason why gapps are part of manifest file and are included
 in finished zip file.
+
+Build signed with own keys (not the public test keys) is done by scripts in the
+[droid build container] repository. Switching from build signed with different
+keys requires wipe of data, otherwise system will not accept old data. Do it in
+lineage recovery after flashing recovery and before sideload of the ota zip:
+Factory reset -> Format data / factory reset. This is like real factory reset and
+it removes everything including accounts, google account too. That was new to me,
+because when doing factory reset from system ui, account has to be removed manually
+first, otherwise after reboot setup wants to sign in to exactly the same account.
+Worked without any problem.
 
 Links:
 
